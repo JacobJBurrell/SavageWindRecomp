@@ -611,7 +611,13 @@ static Result find_release(void) {
     char *json = http_small(url, 8u << 20, &n, "asking for the releases");
     if (!json) return R_PROBLEM;
     int unsig = 0;
+#if defined(_M_ARM64) || defined(__aarch64__)
+    // (Windows on ARM: only an ARM64 zip, never the x64 one over this folder. Upstream signs no ARM64 release, so
+    // none is offered until one is published and signed with the key in sw_update_key.h.)
+    UcPick pick = uc_pick_release(json, g_current, "-windows-arm64.zip", &g_rel, &unsig);
+#else
     UcPick pick = uc_pick_release(json, g_current, "-windows.zip", &g_rel, &unsig);
+#endif
     free(json);
     if (pick == UC_PICK_BAD_JSON) {
         tech("%zu bytes that aren't a list of releases", n);

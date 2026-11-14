@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cwchar>
 #include <locale>
+#include <mutex>  // (std::lock_guard in ffx_vk.cpp: libstdc++ brings it in through the others, libc++ (CLANGARM64) does not)
 #include <new>
 #include <string>
 #endif

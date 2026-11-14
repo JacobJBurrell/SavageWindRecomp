@@ -106,24 +106,41 @@ GAMELIB  := $(B)/swgame.so
 GAMELIB_LDFLAGS := -shared -fuse-ld=lld  # (the runtime functions it calls: the app's own, -rdynamic)
 GAMELIB_SHARED := -shared
 else
+# WINARCH: x86_64 (MSYS2 UCRT64) or aarch64 (MSYS2 CLANGARM64, Windows on ARM: docs/BUILD-windows-arm64.md), from the
+# compiler's own target (uname -m can't tell: MSYS2's shell itself may run emulated).
+WINARCH  ?= $(if $(findstring aarch64,$(shell clang -dumpmachine 2>/dev/null)),aarch64,x86_64)
+WINARCH  := $(WINARCH)
 EXE      := $(B)/savagewind.exe
 DEPINC   := $(if $(DEPS),-I$(DEPS)/include)
 OSFLAGS  := -D_FILE_OFFSET_BITS=64 -D_POSIX_THREAD_SAFE_FUNCTIONS -D_CRT_RAND_S -DWIN32_LEAN_AND_MEAN -DNOMINMAX
+ifeq ($(WINARCH),x86_64)
 GENARCH  ?= -march=x86-64-v3  # AVX2 + FMA for the lifted FP/SIMD code (simd.h)
 GENARCH_COMPAT ?= -march=x86-64-v2  # CPUs without them (GAMELIB_ID_COMPAT below)
+else
+# AArch64 host: the guest's FP/SIMD as inline asm, as on macOS / Linux arm64. Explicit, here and for the start
+# screen's generator run (runtime/gamebuild.c): an emulated x64 Python or swgen would pick the C lowering.
+GENSIMD  := --simd asm
+WIN_GENSIMD := $(GENSIMD)
+endif
 GENFLAGS += -D_FILE_OFFSET_BITS=64 $(GENARCH)
 # --stack: every thread's default stack, reserved (committed as it grows): 256 MB, the guest threads' recursion runs on
 # it (runtime/kernel.c thread_start)
 LDFLAGS  := -fuse-ld=lld -Wl,--stack,268435456 $(if $(DEPS),-L$(DEPS)/lib) -lSDL3 -lavformat -lavcodec -lavutil -lswscale \
             -lvulkan-1 -lwinmm -lole32 -lshell32 -lcomdlg32 -luuid -lshaderc_shared -lpdh -lws2_32 -l:libz.a \
             $(if $(RELEASE),-Wl$(comma)--subsystem$(comma)windows)  # release: no console window (log -> savagewind.log)
+ifeq ($(WINARCH),aarch64)
+LDFLAGS  += -lpthread  # (CLANGARM64's libc++ uses Win32 threads, so winpthreads isn't pulled in on its own)
+endif
 # NVIDIA DLSS is an optional external SDK. Keep proprietary files out of this
 # repository; source builds can point at the sibling checkout with DLSS_SDK=../DLSS.
 DLSS_SDK ?= ../DLSS
 DLSS_DLL := $(DLSS_SDK)/lib/Windows_x86_64/rel/nvngx_dlss.dll
 DLSS_IMPORT := $(B)/nvngx_dlss.a
 DLSS_LIB := $(DLSS_SDK)/lib/Windows_x86_64/x64/nvsdk_ngx_s.lib
-ifneq ($(wildcard $(DLSS_DLL)),)
+ifeq ($(WINARCH),aarch64)
+DLSS_DLL :=  # (the SDK's libraries are x86-64 only: no DLSS on Windows on ARM)
+endif
+ifneq ($(and $(DLSS_DLL),$(wildcard $(DLSS_DLL))),)
 DEPINC += -I$(DLSS_SDK)/include -DDLSS_SDK_PRESENT=1
 LDFLAGS += $(DLSS_IMPORT) $(DLSS_LIB)
 # The SDK wrapper is built with MSVC's CRT directives. Use the MinGW CRT and
@@ -276,7 +293,7 @@ $(B)/rt/gamelib.o: RTFLAGS += -DGAMELIB_ID='"$(GAMELIB_ID)"' $(GAMELIB_TARGETS)
 $(B)/rt/gamebuild.o: $(GAMELIB_SRCS) Makefile
 $(B)/rt/gamebuild.o: RTFLAGS += -DGAMELIB_CFLAGS='"$(strip $(filter-out -Iruntime,$(GENFLAGS)))"' \
                                 $(if $(GENFLAGS_COMPAT),-DGAMELIB_CFLAGS_COMPAT='"$(strip $(filter-out -Iruntime,$(GENFLAGS_COMPAT)))"') \
-                                -DGAMELIB_ZIGFLAGS='"$(GENFLAGS_ZIG)"' -DGAMELIB_SHARED='"$(GAMELIB_SHARED)"' -DGAMELIB_GENARGS='"$(GENLOCALS)"'
+                                -DGAMELIB_ZIGFLAGS='"$(GENFLAGS_ZIG)"' -DGAMELIB_SHARED='"$(GAMELIB_SHARED)"' -DGAMELIB_GENARGS='"$(strip $(GENLOCALS) $(WIN_GENSIMD))"'
 
 # The profiler's Windows sampler guards its stack walks with SEH (__try).
 $(B)/rt/prof_sampler.o: RTFLAGS += -fms-extensions
@@ -407,6 +424,8 @@ dmg: app
 # Needs: Windows 10+ x64, a Vulkan 1.3 driver, an SSE4.2 CPU (GENARCH_COMPAT x86-64-v2; checked at startup).
 DIST     := build/dist/Savage Wind
 WIN_B    := build/win-release
+# Windows on ARM (WINARCH aarch64): SavageWind-<version>-windows-arm64.zip (Windows 11 on ARM64, a Vulkan 1.3 driver)
+WIN_ZIP  := windows$(if $(filter aarch64,$(WINARCH)),-arm64)
 deps-windows:
 	tools/build_deps_windows.sh
 dist:
@@ -440,18 +459,18 @@ dist:
 	    build/fsr-dlls/AMD-FidelityFX-DLL-LICENSE.txt "$(DIST)/"; fi  # (AMD FSR 4: tools/fetch_fsr_dlls.py; AMD's licence allows binary redistribution with this notice)
 	mkdir "$(DIST)/colour-luts" && cp third_party/luts/*.cube third_party/luts/README.md "$(DIST)/colour-luts/"  # (CC0: Video > Colour)
 	cp README.md LICENSE "$(DIST)/"  # (licenses and source links of the bundled components: README "License")
-	if [ -f "$(DLSS_SDK)/lib/Windows_x86_64/rel/nvngx_dlss.dll" ]; then \
+	if [ -n "$(DLSS_DLL)" ] && [ -f "$(DLSS_SDK)/lib/Windows_x86_64/rel/nvngx_dlss.dll" ]; then \
 		cp "$(DLSS_SDK)/lib/Windows_x86_64/rel/nvngx_dlss.dll" "$(DIST)/"; \
 		cp "$(DLSS_SDK)/LICENSE.txt" "$(DIST)/NVIDIA-DLSS-LICENSE.txt"; \
 	fi
-	PATH="$(CURDIR)/build/deps-win/bin:$$PATH" ldd $(WIN_B)/savagewind.exe | awk '(/ucrt64/ || /deps-win/) && !/vulkan-1/ {print $$3}' | sort -u | \
+	PATH="$(CURDIR)/build/deps-win/bin:$$PATH" ldd $(WIN_B)/savagewind.exe | awk '(/ucrt64/ || /clangarm64/ || /deps-win/) && !/vulkan-1/ {print $$3}' | sort -u | \
 	    xargs -I{} cp -u {} "$(DIST)/"
 	! ls "$(DIST)" | grep -iE 'x264|x265|xvid|postproc'  # (no GPL codec libraries in the release)
 	! ls "$(DIST)" | grep -i splash  # (no start screen picture: the player's own, never shipped)
 	python3 tools/make_update_manifest.py "$(DIST)" "$(VERSION)"  # (what SW Update checks and replaces: this list, nothing else)
-	cd build/dist && if command -v zip >/dev/null; then zip -qr "SavageWind-$(VERSION)-windows.zip" "Savage Wind"; \
-	    else /c/Windows/System32/tar.exe -a -cf "SavageWind-$(VERSION)-windows.zip" "Savage Wind"; fi
-	@echo "build/dist/SavageWind-$(VERSION)-windows.zip"
+	cd build/dist && if command -v zip >/dev/null; then zip -qr "SavageWind-$(VERSION)-$(WIN_ZIP).zip" "Savage Wind"; \
+	    else /c/Windows/System32/tar.exe -a -cf "SavageWind-$(VERSION)-$(WIN_ZIP).zip" "Savage Wind"; fi
+	@echo "build/dist/SavageWind-$(VERSION)-$(WIN_ZIP).zip"
 
 # The game code generator as a standalone helper, so players need no Python: build/helper/swgen/ (swgen[.exe] +
 # _internal/), frozen by PyInstaller from tools/swgen.spec in its own venv (build/gen-venv). Shipped as swgen/ next to

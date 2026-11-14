@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 VER=0.17.0
 case "$(uname -s)" in Darwin) OS=macos;; Linux) OS=linux;; *) OS=windows;; esac
 case "$(uname -m)" in arm64|aarch64) ARCH=aarch64;; *) ARCH=x86_64;; esac
+# (Windows: the compiler's own target, as the Makefile's WINARCH: MSYS2's shell may run emulated on ARM)
+[ "$OS" = windows ] && case "$(clang -dumpmachine 2>/dev/null)" in aarch64*) ARCH=aarch64;; esac
 TARGET=${ZIG_TARGET:-$ARCH-$OS}
 EXT=tar.xz; [ "${TARGET#*-}" = windows ] && EXT=zip
 NAME=zig-$TARGET-$VER
@@ -17,6 +19,7 @@ case "$TARGET" in
     x86_64-linux)   SHA=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026 ;;
     aarch64-linux)  SHA=9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8 ;;
     x86_64-windows) SHA=b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428 ;;
+    aarch64-windows) SHA=0a59d91fa1cb40cf068e9b0954434ce973500c7a2ea749f1e01af62cdab52d26 ;;
     *) echo "no zig for $TARGET"; exit 1;;
 esac
 [ -n "$SHA" ] || { echo "tools/fetch_zig.sh: pin the sha256 of $NAME.$EXT first"; exit 1; }

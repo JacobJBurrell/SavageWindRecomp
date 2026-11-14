@@ -127,14 +127,24 @@ static LONG CALLBACK vectored_handler(EXCEPTION_POINTERS *ep) {
     uint64_t fa = er->ExceptionInformation[1];
     if (lazy_commit(fa, er->ExceptionInformation[0])) return EXCEPTION_CONTINUE_EXECUTION;
     g_fault_is_write = er->ExceptionInformation[0] == 1;
+#if defined(_M_ARM64) || defined(__aarch64__)
+    if (g_report_crashes && rt_fault_watch(fa, ep->ContextRecord->Pc)) {
+#else
     if (g_report_crashes && rt_fault_watch(fa, ep->ContextRecord->Rip)) {
+#endif
         extern uint64_t rt_watch_step_page(uint64_t fa);  // runtime/dispatch.c: the page to close again, or 0
         uint64_t page = rt_watch_step_page(fa);
         if (page) {
             extern bool rt_watch_in_range(uint64_t fa);
             t_reclose_page = page;
             t_written = g_fault_is_write && rt_watch_in_range(fa) ? (fa & ~7ull) : 0;
+#if defined(_M_ARM64) || defined(__aarch64__)
+            // (Windows on ARM: no trap flag to set from user mode; the page stays open after this access, so the
+            // debug watchpoint sees only the first one)
+            t_reclose_page = 0, t_written = 0;
+#else
             ep->ContextRecord->EFlags |= 0x100;  // TF: single-step the faulting instruction
+#endif
         }
         return EXCEPTION_CONTINUE_EXECUTION;
     }
@@ -569,12 +579,16 @@ static LONG WINAPI unhandled_filter(EXCEPTION_POINTERS *ep) {
     }
     char what[48];
     snprintf(what, sizeof what, "exception %08lx", er->ExceptionCode);
+#if defined(_M_ARM64) || defined(__aarch64__)
+    rt_fault_report(what, fa, ep->ContextRecord->Pc, ep->ContextRecord->Lr);
+#else
     // x64 has no link register: report the return address on top of the stack (valid at function entry).
     uint64_t lr = 0;
     MEMORY_BASIC_INFORMATION mi;
     if (VirtualQuery((void *)(uintptr_t)ep->ContextRecord->Rsp, &mi, sizeof mi) && mi.State == MEM_COMMIT)
         lr = *(uint64_t *)(uintptr_t)ep->ContextRecord->Rsp;
     rt_fault_report(what, fa, ep->ContextRecord->Rip, lr);
+#endif
 }
 
 void plat_crash_handler_install(void) {

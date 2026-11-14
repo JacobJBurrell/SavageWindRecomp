@@ -42,7 +42,9 @@ static uint64_t os_tid(HANDLE h) { return GetThreadId(h); }
 // RtlLookupFunctionEntry fault and took the game down.
 static struct { uintptr_t lo, hi; } images[512];
 #define STACK_COPY (64u << 10)  // (the frames nearest the leaf: enough to tell work from a wait)
+#if !defined(_M_ARM64) && !defined(__aarch64__)  // (the x64 unwind's; ARM64 samples pc and lr only)
 static uint8_t stack_copy[STACK_COPY + 65536];  // (slack: an unwind may read a little past the end of the copy)
+#endif
 static int nimages;
 static void images_list(void) {
     HMODULE mods[512];
@@ -79,6 +81,17 @@ static NT_TIB *thread_tib(HANDLE h) {
 // so the unwinder may read what is not there. The unwind therefore runs on a copy of the stack (from rsp up, at most
 // STACK_COPY bytes), with rsp and the frame register moved into it, and only inside loaded images; a fault still ends
 // this one sample, never the game (the thread is resumed by the caller either way).
+#if defined(_M_ARM64) || defined(__aarch64__)
+// Windows on ARM: the leaf and its caller (pc, lr) only. The x64 unwind below moves rsp and the frame register into a
+// copy of the stack; not ported to ARM64's unwind codes.
+static int unwind(HANDLE h, CONTEXT *ctx, uint64_t *pc) {
+    (void)h;
+    int d = 0;
+    if (ctx->Pc) pc[d++] = ctx->Pc;
+    if (DEPTH > 1 && ctx->Lr && in_image(ctx->Lr)) pc[d++] = ctx->Lr;
+    return d;
+}
+#else
 static int unwind(HANDLE h, CONTEXT *ctx, uint64_t *pc) {
     volatile int d = 0;
     __try {
@@ -115,6 +128,7 @@ static int unwind(HANDLE h, CONTEXT *ctx, uint64_t *pc) {
     }
     return d;
 }
+#endif
 
 static void *sampler_main(void *arg) {
     (void)arg;

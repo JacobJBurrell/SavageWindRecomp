@@ -37,7 +37,9 @@ const char *sampler_status(void) {
 // RtlLookupFunctionEntry fault and took the game down.
 static struct { uintptr_t lo, hi; } images[512];
 #define STACK_COPY (64u << 10)  // (the frames nearest the leaf: enough to tell work from a wait)
+#if !defined(_M_ARM64) && !defined(__aarch64__)  // (the x64 unwind's; ARM64 samples pc and lr only)
 static uint8_t stack_copy[STACK_COPY + 65536];  // (slack: an unwind may read a little past the end of the copy)
+#endif
 static int nimages;
 static void images_list(void) {
     HMODULE mods[512];
@@ -105,6 +107,11 @@ static void *sampler_main(void *arg) {
                 buf[used++] = handle[i];
                 buf[used++] = 0;  // depth, filled below
                 int d = 0;
+#if defined(_M_ARM64) || defined(__aarch64__)
+                // Windows on ARM: the leaf and its caller (pc, lr) only (the x64 unwind below isn't ported)
+                if (ctx.Pc) buf[used++] = ctx.Pc, d++;
+                if (MAX_DEPTH > 1 && ctx.Lr && in_image(ctx.Lr)) buf[used++] = ctx.Lr, d++;
+#else
                 // The unwind runs on a copy of the stack (from rsp up, at most STACK_COPY bytes), with rsp and the
                 // frame register moved into it: RtlVirtualUnwind then reads nothing but the copy, whatever state the
                 // thread was caught in (a bad rsp or frame register made it fault and took the game down).
@@ -137,6 +144,7 @@ static void *sampler_main(void *arg) {
                     DWORD64 fr = 0;
                     RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, ctx.Rip, f, &ctx, &hd, &fr, NULL);
                 }
+#endif
                 buf[at + 1] = (uint64_t)d;
                 nsamples++;
             }

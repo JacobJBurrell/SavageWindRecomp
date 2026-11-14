@@ -12,6 +12,7 @@ P=$PWD/build/deps-win
 S=$P/src
 mkdir -p "$S"
 JOBS=$(nproc)
+FFARCH=x86_64; case "$(clang -dumpmachine 2>/dev/null)" in aarch64*) FFARCH=aarch64;; esac  # (CLANGARM64: Windows on ARM)
 
 fetch() {  # url sha256 file
     [ -f "$S/$3" ] || curl -fsSL -o "$S/$3.part" "$1" && { [ -f "$S/$3" ] || mv "$S/$3.part" "$S/$3"; }
@@ -24,7 +25,7 @@ fetch https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz \
 
 if [ ! -f "$P/lib/libavcodec.dll.a" ]; then
     unpack ffmpeg-9.0.2.tar.xz ffmpeg
-    (cd "$S/ffmpeg" && ./configure --prefix="$P" --cc=clang --cxx=clang++ --arch=x86_64 --target-os=mingw32 \
+    (cd "$S/ffmpeg" && ./configure --prefix="$P" --cc=clang --cxx=clang++ --arch=$FFARCH --target-os=mingw32 \
         --enable-shared --disable-static \
         --disable-autodetect --disable-programs --disable-doc --disable-network --disable-avdevice --disable-avfilter \
         --disable-swresample --disable-everything \

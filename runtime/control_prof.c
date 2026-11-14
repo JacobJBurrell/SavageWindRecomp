@@ -16,6 +16,12 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <intrin.h>
+// The counter QueryThreadCycleTime counts in, as near as this CPU has one: the TSC (x64), the virtual counter (ARM64)
+#if defined(_M_ARM64) || defined(__aarch64__)
+static inline uint64_t win_tsc(void) { uint64_t v; __asm__ volatile("mrs %0, cntvct_el0" : "=r"(v)); return v; }
+#else
+static inline uint64_t win_tsc(void) { return __rdtsc(); }
+#endif
 #define PSAPI_VERSION 2
 #include <psapi.h>
 #else
@@ -225,7 +231,7 @@ static void cmd_threads(int argc, char **argv, ControlReply *r) {
     uint64_t ns = plat_now_ns();
     double tsc_per_ms = 1;
 #ifdef _WIN32
-    uint64_t tsc = __rdtsc();
+    uint64_t tsc = win_tsc();
     if (ns <= ns0 + 100000000) { control_fail(r, "threads: TSC rate not measured yet; retry in a second"); return; }
     tsc_per_ms = (double)(tsc - tsc0) / ((double)(ns - ns0) / 1e6);
 #endif
@@ -297,7 +303,7 @@ static void cmd_frametrace(int argc, char **argv, ControlReply *r) {
         }
 #ifdef _WIN32
         uint64_t ns = plat_now_ns();
-        if (ns > ns0 + 100000000) ft_tsc_per_ms = (double)(__rdtsc() - tsc0) / ((double)(ns - ns0) / 1e6);
+        if (ns > ns0 + 100000000) ft_tsc_per_ms = (double)(win_tsc() - tsc0) / ((double)(ns - ns0) / 1e6);
 #endif
         ft_snapshot(ft_last);
         ft_on = true;
@@ -423,7 +429,7 @@ void control_prof_init(void) {
     };
     ns0 = plat_now_ns();
 #ifdef _WIN32
-    tsc0 = __rdtsc();
+    tsc0 = win_tsc();
 #endif
     control_register(cmds, (int)(sizeof cmds / sizeof *cmds));
 }

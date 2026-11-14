@@ -9,6 +9,13 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+> [!NOTE]
+> **Windows on ARM community port.** This fork adds a native Windows ARM64 build of Savage Wind. Savage Wind is by
+> [Revivedx and the Savage Wind Recomp contributors](https://github.com/Revivedx/SavageWindRecomp), built on LAS Recomp
+> by Peiikai; the Windows ARM64 port is by JacobJBurrell. All credit for the recompilation goes to them. Download the
+> file ending in `windows-arm64.zip` from this fork's releases; build steps in
+> [docs/BUILD-windows-arm64.md](docs/BUILD-windows-arm64.md). Report ARM64-only problems to this fork, not upstream.
+
 **Savage Wind Recomp** is a work-in-progress static recompilation of *The Legend of Zelda: Breath of the Wild*
 (Nintendo Switch, version 1.9.0) into a native application for Windows and Linux, built from your own copy of the
 game.
@@ -63,6 +70,7 @@ GPU with Vulkan 1.3, 16 GB of RAM, a CPU with SSE4.2 (AVX2 runs faster) and abou
    - **Linux and Steam Deck:** the file ending in `x86_64.AppImage`. Make it executable and run it
      ([docs/linux.md](docs/linux.md)).
    - **Linux on ARM:** the file ending in `aarch64.AppImage`. It is highly experimental.
+   - **Windows on ARM:** the file ending in `windows-arm64.zip` (community port, see the note at the top).
 2. Start it and choose the folder with your extracted game (`exefs/` and `romfs/`). Then choose **Set up game files**.
    It checks the version, copies the files and recompiles the game code once, about 15 minutes on a 12-thread CPU.
    Your own files aren't changed.
@@ -119,7 +127,7 @@ or a cutscene bug, attach your zipped `save` folder too. Reports without these a
 
 Open pull requests against the [`test`](https://github.com/Revivedx/SavageWindRecomp/tree/test) branch, which has
 everything ahead of the latest release. See [CONTRIBUTING.md](CONTRIBUTING.md). To build from source:
-[Windows](docs/BUILD-windows.md) and [Linux](docs/linux.md).
+[Windows](docs/BUILD-windows.md), [Windows on ARM](docs/BUILD-windows-arm64.md) and [Linux](docs/linux.md).
 
 ## Respect copyright
 
