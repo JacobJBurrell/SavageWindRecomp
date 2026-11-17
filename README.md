@@ -83,6 +83,32 @@ settings stay.
 
 Something wrong? See the [FAQ](docs/FAQ.md), which also lists the known issues.
 
+## Windows on ARM64 (community port)
+
+A native Windows ARM64 build of Savage Wind by Revivedx and the Savage Wind Recomp contributors, built on LAS Recomp
+by Peiikai; ported to ARM64 by JacobJBurrell. Report ARM64-only problems to this fork, not upstream.
+
+- **Download:** `SavageWind-0.5.3-alpha.5-windows-arm64.zip` from the
+  [ARM64 pre-release](https://github.com/JacobJBurrell/SavageWindRecomp/releases/tag/v0.5.3-alpha.5-arm64.1).
+- **You need:** Windows 11 on ARM64, a GPU driver with Vulkan 1.3, and your own game files as above. No game files,
+  keys, generated game code or saves are included.
+- **Native:** `savagewind.exe` and the game code library (`swgame.dll`) it builds are both ARM64.
+- **Tested on one machine** (NVIDIA RTX Spark N1X, Vulkan): game version 1.9.0 reached playable gameplay in the Shrine
+  of Resurrection and on the Great Plateau, with both DLC packs detected. Later areas and DLC content are untested.
+  Xbox Series controllers are detected; Xbox prompts and face-button layout are in the controls settings.
+- **Performance seen on that machine, not a guarantee:** at 3840×2400 on the Great Plateau, about 15 FPS at 150%
+  render scale with Extreme shadows, and about 24 FPS on average (ten short samples) at 100% render scale with High
+  shadows, TAA and asynchronous shaders.
+
+Known limitations:
+- The bundled x64 game code generator (`swgen`) crashed on the test machine. There the game code was generated with
+  `tools/gen.py` in a temporary ARM64 Ubuntu under WSL; once set up, the game starts directly in Windows.
+- DLSS is unavailable in the published build: NVIDIA's SDK libraries it uses are x64 only. Native ARM64 DLSS support
+  is experimental and unpublished.
+- The pre-release isn't signed with upstream's update key, so the built-in updater won't offer it. Update by hand.
+
+Build from source: [docs/BUILD-windows-arm64.md](docs/BUILD-windows-arm64.md).
+
 ## Saves
 
 Saves are in the `save` folder of Savage Wind's data folder: next to `savagewind.exe` on Windows, and in
